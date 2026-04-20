@@ -70,6 +70,7 @@ def create_app(config_class=Config):
     
     # 健康检查
     @app.route('/health')
+    @app.route('/api/health')
     def health():
         return {'status': 'ok', 'service': 'MiroFish Backend'}
     
