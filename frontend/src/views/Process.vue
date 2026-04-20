@@ -742,9 +742,20 @@ const fetchGraphData = async () => {
     // 先获取项目信息以获取 graph_id
     const projectResponse = await getProject(currentProjectId.value)
     
-    if (projectResponse.success && projectResponse.data.graph_id) {
-      const graphId = projectResponse.data.graph_id
+    if (projectResponse.success) {
       projectData.value = projectResponse.data
+
+      if (projectResponse.data.status === 'failed') {
+        stopGraphPolling()
+        error.value = projectResponse.data.error || '图谱构建失败'
+        return
+      }
+
+      if (!projectResponse.data.graph_id) {
+        return
+      }
+
+      const graphId = projectResponse.data.graph_id
       
       // 获取图谱数据
       const graphResponse = await getGraphData(graphId)

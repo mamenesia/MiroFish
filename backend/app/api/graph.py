@@ -248,6 +248,7 @@ def generate_ontology():
         })
         
     except Exception as e:
+        logger.exception("本体生成失败")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -378,6 +379,7 @@ def build_graph():
         def build_task():
             set_locale(current_locale)
             build_logger = get_logger('mirofish.build')
+            graph_id = None
             try:
                 build_logger.info(f"[{task_id}] 开始构建图谱...")
                 task_manager.update_task(
@@ -496,8 +498,16 @@ def build_graph():
                 # 更新项目状态为失败
                 build_logger.error(f"[{task_id}] 图谱构建失败: {str(e)}")
                 build_logger.debug(traceback.format_exc())
+
+                if graph_id:
+                    try:
+                        builder.delete_graph(graph_id)
+                    except Exception as cleanup_error:
+                        build_logger.warning(f"[{task_id}] 清理失败图谱失败: {cleanup_error}")
                 
                 project.status = ProjectStatus.FAILED
+                project.graph_id = None
+                project.graph_build_task_id = None
                 project.error = str(e)
                 ProjectManager.save_project(project)
                 

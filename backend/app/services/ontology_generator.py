@@ -172,6 +172,16 @@ B. **具体类型（8个，根据文本内容设计）**：
 - COMPETES_WITH: 竞争
 """
 
+ONTOLOGY_COMPACT_OUTPUT_PROMPT = """Return compact JSON only.
+- Each entity must have exactly 2 attributes.
+- Each entity must have exactly 2 examples.
+- Each edge must have 1-2 source_targets only.
+- Every edge must use an empty attributes array.
+- Keep every description to one short English sentence.
+- Keep analysis_summary under 80 English words.
+- Do not add any explanation before or after the JSON.
+"""
+
 
 class OntologyGenerator:
     """
@@ -181,6 +191,9 @@ class OntologyGenerator:
     
     def __init__(self, llm_client: Optional[LLMClient] = None):
         self.llm_client = llm_client or LLMClient()
+
+    DEFAULT_MAX_TOKENS = 8192
+    RETRY_MAX_TOKENS = 12288
     
     def generate(
         self,
@@ -207,20 +220,32 @@ class OntologyGenerator:
         )
         
         lang_instruction = get_language_instruction()
-        system_prompt = f"{ONTOLOGY_SYSTEM_PROMPT}\n\n{lang_instruction}\nIMPORTANT: Entity type names MUST be in English PascalCase (e.g., 'PersonEntity', 'MediaOrganization'). Relationship type names MUST be in English UPPER_SNAKE_CASE (e.g., 'WORKS_FOR'). Attribute names MUST be in English snake_case. Only description fields and analysis_summary should use the specified language above."
+        system_prompt = f"{ONTOLOGY_SYSTEM_PROMPT}\n\n{lang_instruction}\nIMPORTANT: Entity type names MUST be in English PascalCase (e.g., 'PersonEntity', 'MediaOrganization'). Relationship type names MUST be in English UPPER_SNAKE_CASE (e.g., 'WORKS_FOR'). Attribute names MUST be in English snake_case. Only description fields and analysis_summary should use the specified language above.\n\n{ONTOLOGY_COMPACT_OUTPUT_PROMPT}"
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
         ]
+
+        try:
+            result = self.llm_client.chat_json(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=self.DEFAULT_MAX_TOKENS
+            )
+        except ValueError as exc:
+            if "LLM返回的JSON格式无效" not in str(exc):
+                raise
+
+            retry_messages = [
+                {"role": "system", "content": f"{system_prompt}\n\nYour previous output was truncated. Use shorter descriptions, exactly 2 examples per entity, exactly 2 attributes per entity, and no unnecessary whitespace."},
+                {"role": "user", "content": f"{user_message}\n\nThe previous answer was truncated. Return a smaller but still valid JSON object that fully satisfies the schema."}
+            ]
+            result = self.llm_client.chat_json(
+                messages=retry_messages,
+                temperature=0.2,
+                max_tokens=self.RETRY_MAX_TOKENS
+            )
         
-        # 调用LLM
-        result = self.llm_client.chat_json(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=4096
-        )
-        
-        # 验证和后处理
         result = self._validate_and_process(result)
         
         return result
@@ -270,6 +295,10 @@ class OntologyGenerator:
 3. 前8个是根据文本内容设计的具体类型
 4. 所有实体类型必须是现实中可以发声的主体，不能是抽象概念
 5. 属性名不能使用 name、uuid、group_id 等保留字，用 full_name、org_name 等替代
+6. 每个实体必须恰好包含2个attributes
+7. 每个实体必须恰好包含2个examples
+8. 每个关系必须只包含1到2个source_targets，attributes必须为空数组
+9. description 必须尽量简短，analysis_summary 必须简短
 """
         
         return message
