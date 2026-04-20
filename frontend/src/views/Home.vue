@@ -27,11 +27,11 @@
           
           <div class="hero-desc">
             <p>
-              <i18n-t keypath="home.heroDesc" tag="span">
-                <template #brand><span class="highlight-bold">{{ $t('home.heroDescBrand') }}</span></template>
-                <template #agentScale><span class="highlight-orange">{{ $t('home.heroDescAgentScale') }}</span></template>
-                <template #optimalSolution><span class="highlight-code">{{ $t('home.heroDescOptimalSolution') }}</span></template>
-              </i18n-t>
+              {{ $t('home.heroDesc', {
+                brand: $t('home.heroDescBrand'),
+                agentScale: $t('home.heroDescAgentScale'),
+                optimalSolution: $t('home.heroDescOptimalSolution')
+              }) }}
             </p>
             <p class="slogan-text">
               {{ $t('home.slogan') }}<span class="blinking-cursor">_</span>
